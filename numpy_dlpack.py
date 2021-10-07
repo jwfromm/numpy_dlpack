@@ -1,8 +1,5 @@
-from __future__ import print_function
-
 import tvm
 import numpy as np
-import gc
 import ctypes
 
 libmain = ctypes.cdll.LoadLibrary("./libmain.so")
@@ -61,7 +58,17 @@ class DLTensor(ctypes.Structure):
   @property
   def __array_interface__(self):
     shape = tuple(self.shape[dim] for dim in range(self.ndim))
-    strides = tuple(self.strides[dim] * self.itemsize for dim in range(self.ndim))
+    if self.strides:
+      strides = tuple(self.strides[dim] * self.itemsize for dim in range(self.ndim))
+    else:
+      # Array is compact, make it numpy compatible.
+      strides = []
+      for i, s in enumerate(shape):
+        cumulative = 1
+        for e in range(i + 1, self.ndim):
+          cumulative *= shape[e]
+        strides.append(cumulative * self.itemsize)
+      strides = tuple(strides)
     typestr = '|' + str(self.dtype.type_code)[0] + str(self.itemsize)
     return dict(version = 3, shape = shape, strides = strides, data = (self.data, True), offset = self.byte_offset, typestr = typestr)
 
@@ -79,13 +86,6 @@ DLManagedTensor._fields_ = [("dl_tensor", DLTensor),
                             ("manager_ctx", ctypes.c_void_p),
                             ("deleter", DeleterFunc)]
 
-def display(array):
-  print("data =", hex(array.ctypes.data_as(ctypes.c_void_p).value))
-  print("dtype =", array.dtype)
-  print("ndim =", array.ndim)
-  print("shape =", array.shape)
-  print("strides =", array.strides)
-
 def make_manager_ctx(obj):
   pyobj = ctypes.py_object(obj)
   void_p = ctypes.c_void_p.from_buffer(pyobj)
@@ -98,12 +98,8 @@ def make_manager_ctx(obj):
 def dl_managed_tensor_deleter(dl_managed_tensor_handle):
   void_p = dl_managed_tensor_handle.contents.manager_ctx
   pyobj = ctypes.cast(void_p, ctypes.py_object)
-  print("Deleting manager_ctx:")
-  display(pyobj.value)
   ctypes.pythonapi.Py_DecRef(pyobj)
-  print("Deleter self...")
-  libmain.FreeHandle()
-  print("Done")
+  #libmain.FreeHandle()
 
 PyCapsule_Destructor = ctypes.CFUNCTYPE(None, ctypes.py_object)
 PyCapsule_New = ctypes.pythonapi.PyCapsule_New
@@ -113,10 +109,10 @@ PyCapsule_GetPointer = ctypes.pythonapi.PyCapsule_GetPointer
 PyCapsule_GetPointer.restype = ctypes.c_void_p
 PyCapsule_GetPointer.argtypes = (ctypes.py_object, ctypes.c_char_p)
 
-def make_pycapsule(dl_managed_tensor):
+def make_capsule(dl_managed_tensor):
   return PyCapsule_New(ctypes.byref(dl_managed_tensor), b'dltensor', None)
 
-def numpy_to_dlpack(array):
+def np_to_dlpack(array):
   # You may check array.flags here, e.g. array.flags['C_CONTIGUOUS']
   dl_tensor = DLTensor()
   dl_tensor.data = array.ctypes.data_as(ctypes.c_void_p)
@@ -129,37 +125,28 @@ def numpy_to_dlpack(array):
   for i in range(array.ndim):
     dl_tensor.strides[i] //= array.itemsize
   dl_tensor.byte_offset = 0
-  return dl_tensor
+  dl_managed_tensor= DLManagedTensor()
+  dl_managed_tensor.dl_tensor = dl_tensor
+  dl_managed_tensor.manager_ctx = make_manager_ctx(array)
+  dl_managed_tensor.deleter = dl_managed_tensor_deleter
+  return dl_managed_tensor
 
-def dlpack_to_numpy(pycapsule):
-  dl_managed_tensor = ctypes.cast(PyCapsule_GetPointer(pycapsule, b'dltensor'), ctypes.POINTER(DLManagedTensor)).contents
-  wrapped = type('', (), dict(__array_interface__ = dl_managed_tensor.dl_tensor.__array_interface__, __del__ = lambda self: dl_managed_tensor.deleter(ctypes.byref(dl_managed_tensor))))()
+def dlpack_to_np(capsule):
+  dl_managed_tensor = ctypes.cast(PyCapsule_GetPointer(capsule, b'dltensor'), ctypes.POINTER(DLManagedTensor)).contents
+  wrapped = type('', (), dict(__array_interface__ = dl_managed_tensor.dl_tensor.__array_interface__))()
   return np.asarray(wrapped)
 
-def main():
-  array = np.random.rand(3, 1, 30).astype("float32")
-  print("Created:")
-  display(array)
-  c_obj = DLManagedTensor()
-  c_obj.dl_tensor = numpy_to_dlpack(array)
-  c_obj.manager_ctx = make_manager_ctx(array)
-  c_obj.deleter = dl_managed_tensor_deleter
-  print("IMPORT")
-  capsule = make_pycapsule(c_obj)
-  nd_array = tvm.nd.from_dlpack(capsule)
-  print(nd_array)
-  #np_array = dlpack_to_numpy(capsule)
-  #print(np_array)
-  exit()
-  print("-------------------------")
-  del array
-  gc.collect()
-  libmain.Give(c_obj)
-  print("-------------------------")
-  del c_obj
-  gc.collect()
-  libmain.Finalize()
-  print("-------------------------")
+def dlpack_to_nd(capsule):
+  return tvm.nd.from_dlpack(capsule)
 
-if __name__ == "__main__":
-  main()
+def np_to_nd(array):
+  dl_managed_tensor = np_to_dlpack(array)
+  capsule = make_capsule(dl_managed_tensor)
+  nd_array = dlpack_to_nd(capsule)
+  libmain.Give(dl_managed_tensor)
+  return nd_array
+
+def nd_to_np(array):
+  capsule = array.to_dlpack()
+  np_array = dlpack_to_np(capsule)
+  return np_array
