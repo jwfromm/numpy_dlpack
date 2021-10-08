@@ -2,17 +2,14 @@ import ctypes
 import dlpack
 import tvm
 import numpy as np
+import sys
 
 DLManagedTensorPointer = ctypes.POINTER(dlpack.DLManagedTensor)
 _c_str_dltensor = b"dltensor"
 
-# NOTE: Dependency to libmain is unnecessary. can be replaced by calling malloc and free in glibc
-libmain = ctypes.cdll.LoadLibrary("./libmain.so")
-libmain.AllocDLManagedTensor.restype = DLManagedTensorPointer
-libmain.AllocDLManagedTensor.argtypes = []
-libmain.FreeDLManagedTensor.restype = None
-libmain.FreeDLManagedTensor.argtypes = [DLManagedTensorPointer]
-
+def _alloc_dl_managed_tensor():
+    array = ctypes.create_string_buffer(ctypes.sizeof(dlpack.DLManagedTensor))
+    return ctypes.cast(array, DLManagedTensorPointer)
 
 @ctypes.CFUNCTYPE(None, ctypes.c_void_p)
 def _numpy_array_deleter(handle: ctypes.c_void_p) -> None:
@@ -22,7 +19,7 @@ def _numpy_array_deleter(handle: ctypes.c_void_p) -> None:
     void_p = dl_managed_tensor.contents.manager_ctx
     py_obj = ctypes.cast(void_p, ctypes.py_object)
     ctypes.pythonapi.Py_DecRef(py_obj)
-    libmain.FreeDLManagedTensor(dl_managed_tensor)
+    del dl_managed_tensor
 
 
 @ctypes.CFUNCTYPE(None, ctypes.c_void_p)
@@ -41,7 +38,7 @@ def np_to_nd(array: np.ndarray) -> tvm.nd.NDArray:
         ctypes.pythonapi.Py_IncRef(py_obj)
         dl_managed_tensor.contents.manager_ctx = ctypes.c_void_p.from_buffer(py_obj)
 
-    dl_managed_tensor: DLManagedTensorPointer = libmain.AllocDLManagedTensor()
+    dl_managed_tensor: DLManagedTensorPointer = _alloc_dl_managed_tensor()#libmain.AllocDLManagedTensor()
     dl_managed_tensor.contents.dl_tensor.data = array.ctypes.data_as(ctypes.c_void_p)
     dl_managed_tensor.contents.dl_tensor.device = dlpack.DLDevice(1, 0)
     dl_managed_tensor.contents.dl_tensor.ndim = array.ndim
