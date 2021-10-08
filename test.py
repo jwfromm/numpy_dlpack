@@ -1,16 +1,30 @@
 import numpy as np
 import tvm
-import tvm.testing
 from numpy_dlpack import np_to_nd, nd_to_np
 
-# test converting numpy to tvm ndarray
-array = np.random.normal(size=[10, 10])
-nd_array = np_to_nd(array)
-print(nd_array.numpy())
-print(array.shape)
-exit()
 
-# test converting ndarray to numpy
-array = tvm.nd.array(np.random.normal(size=[10, 10]))
-np_array = nd_to_np(array)
-print(np_array)
+def test_np_to_nd():
+    # Test converting numpy to tvm ndarray
+    print("### Testing np_to_nd")
+    array = np.random.normal(size=[10, 10])
+    array_ref = array.copy()
+    nd_array = np_to_nd(array)
+    del array
+    array_back = nd_array.numpy()
+    np.testing.assert_equal(actual=array_ref, desired=array_back)
+    del nd_array
+
+
+def test_nd_to_np():
+    # Test converting tvm ndarray to numpy
+    print("### Testing nd_to_np")
+    array = tvm.nd.array(np.random.normal(size=[10, 10]))
+    array_ref = array.numpy()
+    np_array = nd_to_np(array)
+    del array
+    np.testing.assert_equal(actual=array_ref, desired=np_array)
+    del np_array
+
+
+test_np_to_nd()
+test_nd_to_np()
