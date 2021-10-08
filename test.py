@@ -28,4 +28,4 @@ def test_nd_to_np():
 import time
 for i in range(10000):
     test_np_to_nd()
-    test_nd_to_np()
+    #test_nd_to_np()

@@ -2,7 +2,6 @@ import ctypes
 import dlpack
 import tvm
 import numpy as np
-import sys
 
 DLManagedTensorPointer = ctypes.POINTER(dlpack.DLManagedTensor)
 _c_str_dltensor = b"dltensor"
