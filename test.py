@@ -5,14 +5,13 @@ from numpy_dlpack import np_to_nd, nd_to_np
 
 def test_np_to_nd():
     # Test converting numpy to tvm ndarray
-    print("### Testing np_to_nd")
-    array = np.random.normal(size=[10, 10])
-    array_ref = array.copy()
-    nd_array = np_to_nd(array)
-    del array
-    array_back = nd_array.numpy()
-    np.testing.assert_equal(actual=array_ref, desired=array_back)
-    del nd_array
+    np_array = np.arange(10, dtype="int32").reshape((2, 5))
+    np_array_ref = np_array.copy()
+    tvm_array = np_to_nd(np_array)
+    return
+    del np_array
+    np.testing.assert_equal(actual=tvm_array.numpy(), desired=np_array_ref)
+    del tvm_array
 
 
 def test_nd_to_np():
@@ -25,7 +24,9 @@ def test_nd_to_np():
     np.testing.assert_equal(actual=array_ref, desired=np_array)
     del np_array
 
-import time
-for i in range(10000):
-    test_np_to_nd()
+
+if __name__ == "__main__":
+    print("### Testing np_to_nd")
+    for i in range(1):
+        test_np_to_nd()
     #test_nd_to_np()
