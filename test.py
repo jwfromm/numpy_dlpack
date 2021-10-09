@@ -1,14 +1,13 @@
 import numpy as np
 import tvm
-from numpy_dlpack import np_to_nd, nd_to_np
+from dlpack import from_numpy
 
 
-def test_np_to_nd():
+def test_from_numpy():
     # Test converting numpy to tvm ndarray
     np_array = np.arange(10, dtype="int32").reshape((2, 5))
     np_array_ref = np_array.copy()
-    tvm_array = np_to_nd(np_array)
-    return
+    tvm_array = from_numpy(np_array, tvm.nd.from_dlpack)
     del np_array
     np.testing.assert_equal(actual=tvm_array.numpy(), desired=np_array_ref)
     del tvm_array
@@ -26,7 +25,7 @@ def test_nd_to_np():
 
 
 if __name__ == "__main__":
-    print("### Testing np_to_nd")
-    for i in range(1):
-        test_np_to_nd()
+    print("### Testing from_numpy")
+    for i in range(10000):
+        test_from_numpy()
     #test_nd_to_np()

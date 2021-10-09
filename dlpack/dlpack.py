@@ -1,5 +1,7 @@
 import ctypes
 
+_c_str_dltensor = b"dltensor"
+
 
 class DLDevice(ctypes.Structure):
     _fields_ = [
