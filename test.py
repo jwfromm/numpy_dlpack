@@ -1,16 +1,31 @@
+import ctypes
 import numpy as np
 import tvm
-import tvm.testing
-from numpy_dlpack import np_to_nd, nd_to_np
+from dlpack import from_numpy, to_numpy
 
-# test converting numpy to tvm ndarray
-array = np.random.normal(size=[10, 10])
-nd_array = np_to_nd(array)
-print(nd_array.numpy())
-print(array.shape)
-exit()
 
-# test converting ndarray to numpy
-array = tvm.nd.array(np.random.normal(size=[10, 10]))
-np_array = nd_to_np(array)
-print(np_array)
+def test_from_numpy():
+    np_array = np.random.normal(size=[10, 10])
+    np_array_ref = np_array.copy()
+    tvm_array = from_numpy(np_array, tvm.nd.from_dlpack)
+    del np_array
+    np.testing.assert_equal(actual=tvm_array.numpy(), desired=np_array_ref)
+    del tvm_array
+
+
+def test_to_numpy():
+    tvm_array = tvm.nd.array(np.random.normal(size=[10, 10]))
+    np_array_ref = tvm_array.numpy()
+    np_array = to_numpy(tvm_array)
+    del tvm_array
+    np.testing.assert_equal(actual=np_array, desired=np_array_ref)
+    del np_array
+
+
+if __name__ == "__main__":
+    print("### Testing from_numpy")
+    for i in range(10000):
+        test_from_numpy()
+    print("### Testing to_numpy")
+    for i in range(10000):
+        test_to_numpy()
