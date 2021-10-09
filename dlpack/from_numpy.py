@@ -10,6 +10,14 @@ ctypes.pythonapi.PyMem_RawFree.argtypes = [ctypes.c_void_p]
 
 
 class _Holder:
+    """A wrapper around a numpy array to keep track of references to the underlying memory.
+
+    Parameters
+    ----------
+    np_array : np.ndarray
+        The numpy array that will be converted to a DLPack tensor and must be managed.
+    """
+
     def __init__(self, np_array: np.ndarray) -> None:
         self.np_array = np_array
         self.data = np_array.ctypes.data_as(ctypes.c_void_p)
@@ -28,6 +36,7 @@ class _Holder:
 
 @ctypes.CFUNCTYPE(None, ctypes.c_void_p)
 def _numpy_array_deleter(handle: ctypes.c_void_p) -> None:
+    """A function to deallocate the memory of a numpy array."""
     dl_managed_tensor = DLManagedTensor.from_address(handle)
     py_obj_ptr = ctypes.cast(
         dl_managed_tensor.manager_ctx, ctypes.POINTER(ctypes.py_object)
@@ -40,6 +49,7 @@ def _numpy_array_deleter(handle: ctypes.c_void_p) -> None:
 
 @ctypes.CFUNCTYPE(None, ctypes.c_void_p)
 def _numpy_pycapsule_deleter(handle: ctypes.c_void_p) -> None:
+    """A function to deallocate a pycapsule that wraps a numpy array."""
     pycapsule: ctypes.py_object = ctypes.cast(handle, ctypes.py_object)
     if ctypes.pythonapi.PyCapsule_IsValid(pycapsule, _c_str_dltensor):
         dl_managed_tensor = ctypes.pythonapi.PyCapsule_GetPointer(
@@ -49,7 +59,24 @@ def _numpy_pycapsule_deleter(handle: ctypes.c_void_p) -> None:
         ctypes.pythonapi.PyCapsule_SetDestructor(pycapsule, None)
 
 
-def from_numpy(np_array: np.ndarray, from_dlpack: Callable):
+def from_numpy(np_array: np.ndarray):
+    """Convert a numpy array to another type of dlpack compatible array.
+
+    Parameters
+    ----------
+    np_array : np.ndarray
+        The source numpy array that will be converted.
+
+    from_dlpack : Callable
+        A function that takes a dlpack pycapsule and returns an array
+        created from it.
+
+    Returns
+    -------
+    pycapsule : PyCapsule
+        A pycapsule containing a DLManagedTensor that can be converted
+        to other array formats without copying the underlying memory.
+    """
     holder = _Holder(np_array)
     size = ctypes.c_size_t(ctypes.sizeof(DLManagedTensor))
     dl_managed_tensor = DLManagedTensor.from_address(
@@ -69,4 +96,4 @@ def from_numpy(np_array: np.ndarray, from_dlpack: Callable):
         _c_str_dltensor,
         _numpy_pycapsule_deleter,
     )
-    return from_dlpack(pycapsule)
+    return pycapsule
