@@ -10,10 +10,14 @@ array frameworks.
 ## File Breakdown
 
 [dlpack.py](dlpack/dlpack.py): Contains the definition of common DLPack structures shared between frameworks. Mirrors the official C++ definitions.
+
 [from_numpy.py](dlpack/from_numpy.py): Demonstrates how to convert a numpy array into a PyCapsule containing a DLPack Tensor.
+
 [to_numpy.py](dlpack/to_numpy.py): Demonstrates how to take a PyCapsule with a DLPack Tensor and convert it into a numpy array.
+
 [test.py](dlpack/test.py): Shows how to_numpy and from_numpy can be used to convert tensor formats without copies.
 
 ## Authors
 [Josh Fromm](https://github.com/jwfromm)
+
 [Junru Shao](https://github.com/junrushao1994)
